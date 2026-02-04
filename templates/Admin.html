@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    table { border-collapse: collapse; }
+    td, th { border: 1px solid #ccc; padding: 6px; }
+    input, select { width: 100%; }
+  </style>
+</head>
+<body>
+
+<h2>Admin – Joueurs</h2>
+
+<table id="table">
+  <thead>
+    <tr>
+      <th>Pseudo</th>
+      <th>Jeux</th>
+      <th>Dispo</th>
+      <th>A.A.</th>
+      <th>Rôle</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const supabase = window.supabase.createClient(
+  "https://TON_PROJET.supabase.co",
+  "PUBLIC_ANON_KEY"
+)
+
+const tbody = document.querySelector("tbody")
+
+function rowHTML(j) {
+  return `
+    <tr data-id="${j.id}">
+      <td><input value="${j.pseudo || ''}" data-col="pseudo"></td>
+      <td><input value="${j.jeux || ''}" data-col="jeux"></td>
+      <td><input type="checkbox" ${j.disponibilite ? "checked" : ""} data-col="disponibilite"></td>
+      <td><input type="checkbox" ${j.aa ? "checked" : ""} data-col="aa"></td>
+      <td>
+        <select data-col="role">
+          <option ${j.role==="Tank"?"selected":""}>Tank</option>
+          <option ${j.role==="Heal"?"selected":""}>Heal</option>
+          <option ${j.role==="DPS"?"selected":""}>DPS</option>
+        </select>
+      </td>
+    </tr>
+  `
+}
+
+// Chargement initial
+async function load() {
+  const { data } = await supabase.from("joueurs").select("*")
+  tbody.innerHTML = data.map(rowHTML).join("")
+}
+load()
+
+// Update quand on modifie un champ
+tbody.addEventListener("change", async e => {
+  const tr = e.target.closest("tr")
+  const id = tr.dataset.id
+  const col = e.target.dataset.col
+  const value = e.target.type === "checkbox"
+    ? e.target.checked
+    : e.target.value
+
+  await supabase.from("joueurs")
+    .update({ [col]: value })
+    .eq("id", id)
+})
+
+// Realtime
+supabase.channel("realtime-joueurs")
+  .on("postgres_changes", {
+    event: "*",
+    schema: "public",
+    table: "joueurs"
+  }, load)
+  .subscribe()
+</script>
+
+</body>
+</html>
