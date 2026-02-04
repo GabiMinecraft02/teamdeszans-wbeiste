@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Members</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; }
+    input, select { width: 100%; }
+    button { padding: 4px 8px; margin: 2px; }
+    #event-box { background: #222; color: #fff; padding: 8px; margin: 10px 0; display: none; }
+  </style>
+</head>
+<body>
+<h2>Members Panel</h2>
+
+<div id="event-box"></div>
+
+<h3>Rejoindre / Modifier votre profil</h3>
+<button id="add">➕ Rejoindre la team</button>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pseudo</th>
+      <th>Jeux</th>
+      <th>Dispo</th>
+      <th>Rôle</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<a herf="https://ps3chatv2.onrender.com">
+  <button>chat</button>
+
+<script>
+const supabase = window.supabase.createClient(
+  "https://dxysplkkpvlqzbmyirhx.supabase.co",
+  "CLE_ANON"
+)
+
+const tbody = document.querySelector("tbody")
+const eventBox = document.getElementById("event-box")
+
+function rowHTML(j) {
+  return `
+    <tr data-id="${j.id}">
+      <td><input value="${j.pseudo || ''}" data-col="pseudo"></td>
+      <td><input value="${j.jeux || ''}" data-col="jeux"></td>
+      <td><input type="checkbox" ${j.disponibilite ? "checked" : ""} data-col="disponibilite"></td>
+      <td>
+        <select data-col="role">
+          <option ${j.role==="Tank"?"selected":""}>Tank</option>
+          <option ${j.role==="Heal"?"selected":""}>Heal</option>
+          <option ${j.role==="DPS"?"selected":""}>DPS</option>
+        </select>
+      </td>
+    </tr>
+  `
+}
+
+// Chargement
+async function loadPlayers() {
+  const { data } = await supabase.from("joueurs").select("*").order("pseudo")
+  tbody.innerHTML = data.map(rowHTML).join("")
+}
+loadPlayers()
+
+// Ajouter sa ligne
+document.getElementById("add").onclick = async () => {
+  await supabase.from("joueurs").insert({ pseudo: "", jeux: "", disponibilite: false, role: "DPS" })
+}
+
+// Modifier live
+tbody.addEventListener("change", async e => {
+  const tr = e.target.closest("tr")
+  if (!tr) return
+  const id = tr.dataset.id
+  const col = e.target.dataset.col
+  const value = e.target.type === "checkbox" ? e.target.checked : e.target.value
+  await supabase.from("joueurs").update({ [col]: value }).eq("id", id)
+})
+
+// Realtime joueurs
+supabase.channel("realtime-joueurs")
+  .on("postgres_changes", { event: "*", schema: "public", table: "joueurs" }, loadPlayers)
+  .subscribe()
+
+// ---------- EVENTS ----------
+async function checkEvents() {
+  const now = new Date().toISOString()
+  const { data } = await supabase.from("events").select("*").lte("start_time", now).eq("active", true).order("start_time", { ascending: false }).limit(1)
+  if (data.length) {
+    const e = data[0]
+    eventBox.style.display = "block"
+    eventBox.innerHTML = `🔥 <b>${e.title}</b><br>${e.message}`
+  }
+}
+checkEvents()
+setInterval(checkEvents, 30000)
+
+supabase.channel("events-live")
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "events" }, checkEvents)
+  .subscribe()
+</script>
+</body>
+</html>
