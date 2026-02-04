@@ -3,16 +3,16 @@ import os
 
 password = os.getenv("PASSWORD")
 
-@app_route(/)
-def home():
+@app.route(/)
+def index():
   return render_template("index.html")
 
-@app_route(/adminlogin)
-def home():
+@app.route(/adminlogin)
+def admin_login():
   return render_template("AdminLogin.html")
 
 @app.route("/Admin", methods=["GET", "POST"])
-def home():
+def admin():
     if request.method == "POST":
         password = request.form.get("password")
 
