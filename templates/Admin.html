@@ -14,6 +14,8 @@
 
 <h2>Admin – Joueurs</h2>
 
+  <button id="add">➕ Ajouter joueur</button>
+
 <table id="table">
   <thead>
     <tr>
@@ -22,6 +24,7 @@
       <th>Dispo</th>
       <th>A.A.</th>
       <th>Rôle</th>
+      <th>🗑️</th>
     </tr>
   </thead>
   <tbody></tbody>
@@ -30,7 +33,7 @@
 <script>
 const supabase = window.supabase.createClient(
   "https://dxysplkkpvlqzbmyirhx.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eXNwbGtrcHZscXpibXlpcmh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMDcwNjUsImV4cCI6MjA4NTc4MzA2NX0.6WDLXCLUpZ7Uc_5hO8jKdYjfGD3LwfIH0IudVi1f1UM"
+  "TA_CLE_ANON_PUBLIQUE"
 )
 
 const tbody = document.querySelector("tbody")
@@ -49,22 +52,29 @@ function rowHTML(j) {
           <option ${j.role==="DPS"?"selected":""}>DPS</option>
         </select>
       </td>
+      <td>
+        <button onclick="removeRow('${j.id}')">🗑️</button>
+      </td>
     </tr>
   `
 }
 
 // Chargement initial
 async function load() {
-  const { data } = await supabase.from("joueurs").select("*")
+  const { data } = await supabase.from("joueurs").select("*").order("pseudo")
   tbody.innerHTML = data.map(rowHTML).join("")
 }
 load()
 
-// Update quand on modifie un champ
+// Update live
 tbody.addEventListener("change", async e => {
   const tr = e.target.closest("tr")
+  if (!tr) return
+
   const id = tr.dataset.id
   const col = e.target.dataset.col
+  if (!col) return
+
   const value = e.target.type === "checkbox"
     ? e.target.checked
     : e.target.value
@@ -73,6 +83,23 @@ tbody.addEventListener("change", async e => {
     .update({ [col]: value })
     .eq("id", id)
 })
+
+// ➕ Ajouter joueur
+document.getElementById("add").onclick = async () => {
+  await supabase.from("joueurs").insert({
+    pseudo: "",
+    jeux: "",
+    disponibilite: false,
+    aa: false,
+    role: "DPS"
+  })
+}
+
+// 🗑️ Supprimer joueur
+async function removeRow(id) {
+  if (!confirm("Supprimer ce joueur ?")) return
+  await supabase.from("joueurs").delete().eq("id", id)
+}
 
 // Realtime
 supabase.channel("realtime-joueurs")
