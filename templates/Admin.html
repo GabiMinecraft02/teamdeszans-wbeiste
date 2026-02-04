@@ -1,22 +1,35 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <title>Admin</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    table { border-collapse: collapse; }
-    td, th { border: 1px solid #ccc; padding: 6px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; }
     input, select { width: 100%; }
+    button { padding: 4px 8px; margin: 2px; }
+    #event-box { background: #222; color: #fff; padding: 8px; margin: 10px 0; display: none; }
   </style>
 </head>
 <body>
+<h2>Admin Panel</h2>
 
-<h2>Admin – Joueurs</h2>
+<!-- Events -->
+<div>
+  <h3>Créer un event</h3>
+  <input id="title" placeholder="Titre">
+  <input id="message" placeholder="Message">
+  <input id="time" type="datetime-local">
+  <button id="create-event">Créer</button>
+</div>
 
-  <button id="add">➕ Ajouter joueur</button>
+<div id="event-box"></div>
 
-<table id="table">
+<!-- Joueurs -->
+<h3>Joueurs</h3>
+<button id="add">➕ Ajouter joueur</button>
+<table>
   <thead>
     <tr>
       <th>Pseudo</th>
@@ -24,7 +37,7 @@
       <th>Dispo</th>
       <th>A.A.</th>
       <th>Rôle</th>
-      <th>🗑️</th>
+      <th>Supprimer</th>
     </tr>
   </thead>
   <tbody></tbody>
@@ -33,10 +46,11 @@
 <script>
 const supabase = window.supabase.createClient(
   "https://dxysplkkpvlqzbmyirhx.supabase.co",
-  "TA_CLE_ANON_PUBLIQUE"
+  "CLE_ANON" // remplace par ta clé
 )
 
 const tbody = document.querySelector("tbody")
+const eventBox = document.getElementById("event-box")
 
 function rowHTML(j) {
   return `
@@ -52,64 +66,76 @@ function rowHTML(j) {
           <option ${j.role==="DPS"?"selected":""}>DPS</option>
         </select>
       </td>
-      <td>
-        <button onclick="removeRow('${j.id}')">🗑️</button>
-      </td>
+      <td><button onclick="removeRow('${j.id}')">🗑️</button></td>
     </tr>
   `
 }
 
-// Chargement initial
-async function load() {
+// Chargement joueurs
+async function loadPlayers() {
   const { data } = await supabase.from("joueurs").select("*").order("pseudo")
   tbody.innerHTML = data.map(rowHTML).join("")
 }
-load()
+loadPlayers()
 
 // Update live
 tbody.addEventListener("change", async e => {
   const tr = e.target.closest("tr")
   if (!tr) return
-
   const id = tr.dataset.id
   const col = e.target.dataset.col
-  if (!col) return
+  const value = e.target.type === "checkbox" ? e.target.checked : e.target.value
 
-  const value = e.target.type === "checkbox"
-    ? e.target.checked
-    : e.target.value
-
-  await supabase.from("joueurs")
-    .update({ [col]: value })
-    .eq("id", id)
+  await supabase.from("joueurs").update({ [col]: value }).eq("id", id)
 })
 
-// ➕ Ajouter joueur
+// Ajouter joueur
 document.getElementById("add").onclick = async () => {
-  await supabase.from("joueurs").insert({
-    pseudo: "",
-    jeux: "",
-    disponibilite: false,
-    aa: false,
-    role: "DPS"
-  })
+  await supabase.from("joueurs").insert({ pseudo: "", jeux: "", disponibilite: false, aa: false, role: "DPS" })
 }
 
-// 🗑️ Supprimer joueur
+// Supprimer
 async function removeRow(id) {
   if (!confirm("Supprimer ce joueur ?")) return
   await supabase.from("joueurs").delete().eq("id", id)
 }
 
-// Realtime
+// Realtime joueurs
 supabase.channel("realtime-joueurs")
-  .on("postgres_changes", {
-    event: "*",
-    schema: "public",
-    table: "joueurs"
-  }, load)
+  .on("postgres_changes", { event: "*", schema: "public", table: "joueurs" }, loadPlayers)
+  .subscribe()
+
+// ---------- EVENTS ----------
+const titleInput = document.getElementById("title")
+const messageInput = document.getElementById("message")
+const timeInput = document.getElementById("time")
+
+document.getElementById("create-event").onclick = async () => {
+  const title = titleInput.value
+  const message = messageInput.value
+  const time = timeInput.value
+  if (!title || !time) return alert("Titre et heure obligatoires")
+  await supabase.from("events").insert({ title, message, start_time: new Date(time).toISOString(), active: true })
+  alert("Event créé 🎉")
+}
+
+// Affichage event
+async function checkEvents() {
+  const now = new Date().toISOString()
+  const { data } = await supabase.from("events").select("*").lte("start_time", now).eq("active", true).order("start_time", { ascending: false }).limit(1)
+  if (data.length) {
+    const e = data[0]
+    eventBox.style.display = "block"
+    eventBox.innerHTML = `🔥 <b>${e.title}</b><br>${e.message}`
+  }
+}
+checkEvents()
+setInterval(checkEvents, 30000)
+
+// Realtime events
+supabase.channel("events-live")
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "events" }, checkEvents)
   .subscribe()
 </script>
-
 </body>
 </html>
